@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Student Attendance System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    th.sticky, td.sticky {
+      background-color: inherit;
+    }
+    .dark-mode {
+      background-color: #1a202c;
+      color: white;
+    }
+    .dark-mode table {
+      color: white;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col transition-all">
+  <header class="bg-blue-700 text-white p-4 flex justify-between items-center">
+    <h1 class="text-xl font-semibold">Student Attendance System</h1>
+    <div class="flex gap-2 items-center">
+      <button id="teacherBtn" class="px-3 py-1 rounded bg-blue-500 hover:bg-blue-600">Teacher View</button>
+      <button id="studentBtn" class="px-3 py-1 rounded bg-blue-500 hover:bg-blue-600">Student View</button>
+      <button id="toggleTheme" class="ml-4 px-2 py-1 bg-gray-200 text-black rounded hover:bg-gray-300">🌓</button>
+    </div>
+  </header>
+
+  <main class="flex-grow container mx-auto p-4 max-w-6xl">
+    <!-- Teacher View -->
+    <section id="teacherView" class="hidden">
+      <h2 class="text-2xl font-semibold mb-4">Teacher Dashboard</h2>
+      <form id="registerStudentForm" class="flex flex-col sm:flex-row gap-4 mb-6">
+        <input id="studentIdInput" type="text" placeholder="Student ID" required class="border px-3 py-2 rounded w-full sm:w-1/3" />
+        <input id="studentNameInput" type="text" placeholder="Student Name" required class="border px-3 py-2 rounded w-full sm:w-1/3" />
+        <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700">Add Student</button>
+      </form>
+
+      <div class="bg-white dark:bg-gray-800 p-6 rounded shadow">
+        <div class="mb-4">
+          <label class="font-semibold">Select Month: </label>
+          <input type="month" id="attendanceMonth" class="border px-3 py-2 rounded dark:bg-gray-700 dark:text-white" />
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full border table-fixed bg-white" id="attendanceTable">
+            <thead class="bg-white">
+              <tr>
+                <th class="border px-2 py-1 sticky left-0 z-10 bg-white min-w-[6rem]">ID</th>
+                <th class="border px-2 py-1 sticky left-[6rem] z-10 bg-white min-w-[12rem]">Name</th>
+                <!-- Dynamic day columns will be inserted here -->
+                <th class="border px-2 py-1 text-center">Present</th>
+                <th class="border px-2 py-1 text-center">Absent</th>
+              </tr>
+            </thead>
+            <tbody id="attendanceTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Student View -->
+    <section id="studentView" class="hidden">
+      <h2 class="text-2xl font-semibold mb-4">Student Attendance Report</h2>
+      <form id="studentReportForm" class="flex gap-4 mb-4">
+        <input id="studentReportIdInput" type="text" placeholder="Enter Student ID" required class="border px-3 py-2 rounded w-full sm:w-1/3" />
+        <button class="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700">View Report</button>
+        <button id="downloadPdf" type="button" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 hidden">Export PDF</button>
+      </form>
+      <div id="studentReportContainer" class="bg-white dark:bg-white p-6 rounded shadow hidden">
+        <h3 class="text-xl font-semibold mb-2" id="studentReportName"></h3>
+        <p id="attendancePercentage" class="mb-2 text-sm"></p>
+        <table class="min-w-full border bg-white dark:bg-white">
+          <thead class="bg-blue-100 dark:bg-gray-700">
+            <tr>
+              <th class="border px-2 py-1">Date</th>
+              <th class="border px-2 py-1 text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody id="studentReportTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bg-blue-700 text-white p-4 text-center">
+    &copy; 2024 Student Attendance System
+  </footer>
+
+  <script>
+    const teacherBtn = document.getElementById("teacherBtn");
+    const studentBtn = document.getElementById("studentBtn");
+    const teacherView = document.getElementById("teacherView");
+    const studentView = document.getElementById("studentView");
+    const registerStudentForm = document.getElementById("registerStudentForm");
+    const studentIdInput = document.getElementById("studentIdInput");
+    const studentNameInput = document.getElementById("studentNameInput");
+    const attendanceMonth = document.getElementById("attendanceMonth");
+    const attendanceTableBody = document.getElementById("attendanceTableBody");
+    const studentReportForm = document.getElementById("studentReportForm");
+    const studentReportIdInput = document.getElementById("studentReportIdInput");
+    const studentReportContainer = document.getElementById("studentReportContainer");
+    const studentReportTableBody = document.getElementById("studentReportTableBody");
+    const studentReportName = document.getElementById("studentReportName");
+    const attendancePercentage = document.getElementById("attendancePercentage");
+    const downloadPdfBtn = document.getElementById("downloadPdf");
+    const toggleThemeBtn = document.getElementById("toggleTheme");
+
+    let currentStudent = null;
+
+    const getStudents = () => JSON.parse(localStorage.getItem("students") || "[]");
+    const saveStudents = (students) => localStorage.setItem("students", JSON.stringify(students));
+    const getAttendance = () => JSON.parse(localStorage.getItem("attendance") || "{}");
+    const saveAttendance = (att) => localStorage.setItem("attendance", JSON.stringify(att));
+
+    teacherBtn.onclick = () => {
+      teacherView.classList.remove("hidden");
+      studentView.classList.add("hidden");
+    };
+
+    studentBtn.onclick = () => {
+      studentView.classList.remove("hidden");
+      teacherView.classList.add("hidden");
+    };
+
+    registerStudentForm.onsubmit = (e) => {
+      e.preventDefault();
+      const id = studentIdInput.value.trim();
+      const name = studentNameInput.value.trim();
+      if (!id || !name) return;
+      let students = getStudents();
+      if (students.some(s => s.id === id)) return alert("Student ID already exists");
+      students.push({ id, name });
+      saveStudents(students);
+      studentIdInput.value = "";
+      studentNameInput.value = "";
+      alert("Student registered!");
+      if (attendanceMonth.value) renderAttendanceTable(attendanceMonth.value);
+    };
+
+    function isWorkingDay(date) {
+      const day = date.getDay();
+      return day >= 1 && day <= 5;
+    }
+
+    function renderAttendanceTable(monthVal) {
+      const [year, month] = monthVal.split("-").map(Number);
+      const days = new Date(year, month, 0).getDate();
+      const students = getStudents();
+      const attendance = getAttendance();
+      const thead = document.querySelector("#attendanceTable thead tr");
+      while (thead.children.length > 4) thead.removeChild(thead.children[2]);
+      for (let d = 1; d <= days; d++) {
+        const date = new Date(year, month - 1, d);
+        if (!isWorkingDay(date)) continue;
+        const th = document.createElement("th");
+        th.textContent = d;
+        th.className = "border px-2 py-1 text-center text-sm";
+        thead.insertBefore(th, thead.children[thead.children.length - 2]);
+      }
+
+      attendanceTableBody.innerHTML = "";
+      students.forEach(student => {
+        const tr = document.createElement("tr");
+        const tdId = document.createElement("td");
+        tdId.textContent = student.id;
+        tdId.className = "border px-2 py-1 sticky left-0 bg-white";
+        const tdName = document.createElement("td");
+        tdName.textContent = student.name;
+        tdName.className = "border px-2 py-1 sticky left-[6rem] bg-white";
+        tr.append(tdId, tdName);
+        let present = 0, absent = 0;
+        for (let d = 1; d <= days; d++) {
+          const date = new Date(year, month - 1, d);
+          if (!isWorkingDay(date)) continue;
+          const dateStr = date.toISOString().split("T")[0];
+          const td = document.createElement("td");
+          td.className = "border text-center px-2 py-1";
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.checked = attendance[dateStr]?.[student.id] === "present";
+          cb.addEventListener("change", () => {
+            const att = getAttendance();
+            att[dateStr] = att[dateStr] || {};
+            att[dateStr][student.id] = cb.checked ? "present" : "absent";
+            saveAttendance(att);
+            renderAttendanceTable(monthVal);
+          });
+          td.appendChild(cb);
+          tr.appendChild(td);
+          cb.checked ? present++ : absent++;
+        }
+        const tdPresent = document.createElement("td");
+        tdPresent.textContent = present;
+        tdPresent.className = "border text-center";
+        const tdAbsent = document.createElement("td");
+        tdAbsent.textContent = absent;
+        tdAbsent.className = "border text-center";
+        tr.append(tdPresent, tdAbsent);
+        attendanceTableBody.appendChild(tr);
+      });
+    }
+
+    attendanceMonth.onchange = (e) => renderAttendanceTable(e.target.value);
+
+    studentReportForm.onsubmit = (e) => {
+      e.preventDefault();
+      const id = studentReportIdInput.value.trim();
+      const students = getStudents();
+      const student = students.find(s => s.id === id);
+      if (!student) return alert("Student not found");
+      currentStudent = student;
+      studentReportName.textContent = student.name;
+      const attendance = getAttendance();
+      let totalDays = 0, presentCount = 0;
+      studentReportTableBody.innerHTML = "";
+      for (let dateStr in attendance) {
+        if (attendance[dateStr][id] !== undefined) {
+          const date = new Date(dateStr);
+          const tr = document.createElement("tr");
+          const tdDate = document.createElement("td");
+          tdDate.textContent = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+          tdDate.className = "border px-2 py-1 text-center";
+          const tdStatus = document.createElement("td");
+          tdStatus.textContent = attendance[dateStr][id];
+          tdStatus.className = "border px-2 py-1 text-center";
+          tr.append(tdDate, tdStatus);
+          studentReportTableBody.appendChild(tr);
+          totalDays++;
+          if (attendance[dateStr][id] === "present") presentCount++;
+        }
+      }
+      attendancePercentage.textContent = `Attendance: ${((presentCount / totalDays) * 100).toFixed(2)}%`;
+      studentReportContainer.classList.remove("hidden");
+      downloadPdfBtn.classList.remove("hidden");
+    };
+
+    downloadPdfBtn.onclick = () => {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.text(`${currentStudent.name}'s Attendance Report`, 20, 20);
+      let y = 30;
+      studentReportTableBody.querySelectorAll("tr").forEach(tr => {
+        const [tdDate, tdStatus] = tr.children;
+        doc.text(tdDate.textContent, 20, y);
+        doc.text(tdStatus.textContent, 100, y);
+        y += 10;
+      });
+      doc.save(`${currentStudent.name}_Attendance_Report.pdf`);
+    };
+
+    toggleThemeBtn.onclick = () => {
+      document.body.classList.toggle("dark-mode");
+      toggleThemeBtn.textContent = document.body.classList.contains("dark-mode") ? "🌞" : "🌓";
+    };
+  </script>
+</body>
+</html>
