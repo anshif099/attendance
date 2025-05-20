@@ -2,64 +2,195 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Student Attendance System</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Student Attendance</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f4f8;
+      padding: 20px;
+      color: #333;
+    }
+    h2 {
+      text-align: center;
+      color: #2c3e50;
+    }
+    form {
+      max-width: 400px;
+      margin: 20px auto;
+      background: #fff;
+      padding: 25px;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    input[type="text"],
+    input[type="date"],
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      margin-top: 5px;
+      border: 1.5px solid #ddd;
+      border-radius: 5px;
+      transition: border-color 0.3s;
+      font-size: 16px;
+    }
+    input[type="text"]:focus,
+    input[type="date"]:focus,
+    select:focus {
+      border-color: #3498db;
+      outline: none;
+    }
+    button {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      margin: 10px 5px 0 0;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #2980b9;
+    }
+    #output {
+      max-width: 400px;
+      margin: 15px auto;
+      font-weight: 600;
+      color: #27ae60;
+      text-align: center;
+    }
+  </style>
 </head>
 <body>
-  <h1>Student Attendance System</h1>
+  <h2>Student Attendance</h2>
 
-  <div class="section">
-    <h2>Teacher Panel</h2>
-    <input type="text" id="studentId" placeholder="Student ID">
-    <input type="text" id="studentName" placeholder="Student Name">
-    <button onclick="registerStudent()">Register Student</button>
+  <form id="attendanceForm">
+    <label>
+      Student ID:
+      <input type="text" id="studentId" required placeholder="e.g. 1234" />
+    </label>
 
-    <br><br>
-    <select id="monthSelect">
-  <option value="">Select Month</option>
-  <option value="January">January</option>
-  <option value="February">February</option>
-  <option value="March">March</option>
-  <option value="April">April</option>
-  <option value="May">May</option>
-  <option value="June">June</option>
-  <option value="July">July</option>
-  <option value="August">August</option>
-  <option value="September">September</option>
-  <option value="October">October</option>
-  <option value="November">November</option>
-  <option value="December">December</option>
-</select>
+    <label>
+      Student Name:
+      <input type="text" id="studentName" required placeholder="Full Name" />
+    </label>
 
-    <div id="studentList"></div>
-    <button onclick="saveAttendance()">Save Attendance</button>
-  </div>
+    <label>
+      Date:
+      <input type="date" id="date" required />
+    </label>
 
-  <hr>
+    <label>
+      Status:
+      <select id="status" required>
+        <option value="">Select Status</option>
+        <option value="present">Present</option>
+        <option value="absent">Absent</option>
+      </select>
+    </label>
 
-  <div class="section">
-    <h2>Student Panel</h2>
-    <input type="text" id="loginId" placeholder="Enter Your ID">
-    <select id="studentMonthSelect">
-  <option value="">Select Month</option>
-  <option value="January">January</option>
-  <option value="February">February</option>
-  <option value="March">March</option>
-  <option value="April">April</option>
-  <option value="May">May</option>
-  <option value="June">June</option>
-  <option value="July">July</option>
-  <option value="August">August</option>
-  <option value="September">September</option>
-  <option value="October">October</option>
-  <option value="November">November</option>
-  <option value="December">December</option>
-</select>
-    <button onclick="viewAttendance()">View Attendance</button>
-    <div id="attendanceResult"></div>
-  </div>
+    <button type="submit">Save Attendance</button>
+    <button type="button" id="readBtn">Read Attendance</button>
+  </form>
 
-  <script src="script.js"></script>
+  <p id="output"></p>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-app.js";
+    import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-database.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-analytics.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC6IIdUfPYLaxjYa9RtKAUJBYKD5Hv1Loc",
+      authDomain: "studentattendanceapp-269ce.firebaseapp.com",
+      databaseURL: "https://studentattendanceapp-269ce-default-rtdb.firebaseio.com",
+      projectId: "studentattendanceapp-269ce",
+      storageBucket: "studentattendanceapp-269ce.firebasestorage.app",
+      messagingSenderId: "883581181155",
+      appId: "1:883581181155:web:259f87dd4ef81c2e74b9d6",
+      measurementId: "G-Q59HQC6M7B"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const database = getDatabase(app);
+
+    const form = document.getElementById('attendanceForm');
+    const output = document.getElementById('output');
+    const readBtn = document.getElementById('readBtn');
+
+    // Save attendance with student name
+    function writeAttendance(studentId, studentName, date, status) {
+      return set(ref(database, 'attendance/' + studentId + '/' + date), {
+        name: studentName,
+        status: status
+      });
+    }
+
+    // Read attendance data
+    function readAttendance(studentId, date) {
+      const dbRef = ref(database);
+      return get(child(dbRef, `attendance/${studentId}/${date}`));
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const studentId = document.getElementById('studentId').value.trim();
+      const studentName = document.getElementById('studentName').value.trim();
+      const date = document.getElementById('date').value;
+      const status = document.getElementById('status').value;
+
+      if (!studentId || !studentName || !date || !status) {
+        output.style.color = 'red';
+        output.textContent = "Please fill all fields.";
+        return;
+      }
+
+      writeAttendance(studentId, studentName, date, status)
+        .then(() => {
+          output.style.color = '#27ae60';
+          output.textContent = `Attendance saved for ${studentName} (ID: ${studentId}) on ${date} as ${status}.`;
+          form.reset();
+        })
+        .catch((error) => {
+          output.style.color = 'red';
+          output.textContent = `Error saving attendance: ${error}`;
+        });
+    });
+
+    readBtn.addEventListener('click', () => {
+      const studentId = document.getElementById('studentId').value.trim();
+      const date = document.getElementById('date').value;
+
+      if (!studentId || !date) {
+        output.style.color = 'red';
+        output.textContent = "Please enter Student ID and Date to read attendance.";
+        return;
+      }
+
+      readAttendance(studentId, date)
+        .then((snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.val();
+            output.style.color = '#2c3e50';
+            output.textContent = `Attendance for ${data.name} (ID: ${studentId}) on ${date}: ${data.status}`;
+          } else {
+            output.style.color = 'orange';
+            output.textContent = `No attendance data found for ID: ${studentId} on ${date}.`;
+          }
+        })
+        .catch((error) => {
+          output.style.color = 'red';
+          output.textContent = `Error reading attendance: ${error}`;
+        });
+    });
+  </script>
 </body>
 </html>
