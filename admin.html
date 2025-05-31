@@ -119,7 +119,7 @@
       authDomain: "studentattendanceapp-269ce.firebaseapp.com",
       databaseURL: "https://studentattendanceapp-269ce-default-rtdb.firebaseio.com",
       projectId: "studentattendanceapp-269ce",
-      storageBucket: "studentattendanceapp-269ce.firebasestorage.app",
+      storageBucket: "studentattendanceapp-269ce.appspot.com",
       messagingSenderId: "883581181155",
       appId: "1:883581181155:web:259f87dd4ef81c2e74b9d6",
       measurementId: "G-Q59HQC6M7B"
@@ -133,9 +133,9 @@
     const searchInput = document.getElementById('searchInput');
     const exportBtn = document.getElementById('exportBtn');
 
-    let attendanceData = []; // will hold all attendance entries
+    let attendanceData = [];
+    let filteredData = [];
 
-    // Fetch all attendance data from Firebase
     async function fetchAttendance() {
       loadingText.style.display = 'block';
       tableBody.innerHTML = '';
@@ -148,10 +148,6 @@
 
         if (snapshot.exists()) {
           const data = snapshot.val();
-
-          // Firebase data structure:
-          // attendance/{studentId}/{date} = { name: ..., status: ... }
-          // We want to flatten it for the table
 
           for (const studentId in data) {
             const dates = data[studentId];
@@ -166,7 +162,8 @@
             }
           }
 
-          renderTable(attendanceData);
+          filteredData = [...attendanceData];
+          renderTable(filteredData);
         } else {
           tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No attendance data found.</td></tr>';
         }
@@ -177,12 +174,12 @@
       loadingText.style.display = 'none';
     }
 
-    // Render rows to table
     function renderTable(data) {
       if (!data.length) {
         tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No records match your search.</td></tr>';
         return;
       }
+
       tableBody.innerHTML = '';
 
       data.forEach(item => {
@@ -199,9 +196,8 @@
         tableBody.appendChild(tr);
       });
 
-      // Attach delete event listeners
       document.querySelectorAll('.delete-btn').forEach(button => {
-        button.addEventListener('click', (e) => {
+        button.addEventListener('click', () => {
           const studentId = button.getAttribute('data-id');
           const date = button.getAttribute('data-date');
           if (confirm(`Delete attendance for Student ID: ${studentId} on ${date}?`)) {
@@ -211,44 +207,39 @@
       });
     }
 
-    // Delete a record
     async function deleteRecord(studentId, date) {
       try {
         await remove(ref(database, `attendance/${studentId}/${date}`));
-        // Also remove from attendanceData and refresh table
         attendanceData = attendanceData.filter(item => !(item.studentId === studentId && item.date === date));
-        renderTable(attendanceData);
+        filteredData = filteredData.filter(item => !(item.studentId === studentId && item.date === date));
+        renderTable(filteredData);
         alert('Record deleted successfully.');
       } catch (error) {
         alert('Error deleting record: ' + error);
       }
     }
 
-    // Filter data based on search input
     searchInput.addEventListener('input', () => {
       const query = searchInput.value.toLowerCase().trim();
-      const filtered = attendanceData.filter(item => 
+      filteredData = attendanceData.filter(item => 
         item.studentId.toLowerCase().includes(query) ||
         item.name.toLowerCase().includes(query) ||
         item.date.toLowerCase().includes(query) ||
         item.status.toLowerCase().includes(query)
       );
-      renderTable(filtered);
+      renderTable(filteredData);
     });
 
-    // Export current table data to CSV
     exportBtn.addEventListener('click', () => {
-      if (!attendanceData.length) {
+      if (!filteredData.length) {
         alert('No data to export.');
         return;
       }
-      exportToCSV(attendanceData, 'attendance_export.csv');
+      exportToCSV(filteredData, 'attendance_export.csv');
     });
 
-    // CSV export helper
     function exportToCSV(data, filename) {
       const csvRows = [];
-      // headers
       csvRows.push(['Student ID', 'Student Name', 'Date', 'Status'].join(','));
 
       data.forEach(row => {
@@ -268,7 +259,6 @@
       document.body.removeChild(a);
     }
 
-    // Initial load
     fetchAttendance();
   </script>
 </body>
